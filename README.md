@@ -14,14 +14,13 @@ This project demonstrates the best practice of deploying AWS infrastructure in l
 ### Instructions
 
 1. Download the network template file:  
-   Provided original: `ikhsan-network.yaml`  
+   Provided original: `network.yaml`  
 
 2. In the AWS Management Console:  
    - Navigate to **CloudFormation** > **Create stack** > **With new resources (standard)**  
    - **Prepare template**: Select *Template is ready*  
    - **Template source**: Upload file >Select `ikhsan-network.yaml`  
    - **Stack name**: Enter `ikhsan-network`  
-   - **Tags**: Add tag with `Key: application` and `Value: inventory`  
    - Review and create the stack
 
 3. Wait until the stack status is `CREATE_COMPLETE`.
@@ -42,15 +41,14 @@ This project demonstrates the best practice of deploying AWS infrastructure in l
 ### Instructions
 
 1. Download the application template file:  
-   Provided original: `ikhsan-application.yaml`  
+   Provided original: `application.yaml`  
 
 2. In the AWS Management Console:  
    - Navigate to **CloudFormation** > **Create stack** > **With new resources (standard)**  
    - **Prepare template**: Select *Template is ready*  
-   - **Template source**: Upload file > Select `ikhsan-application.yaml`  
+   - **Template source**: Upload file > Select `application.yaml`  
    - **Stack name**: Enter `ikhsan-application`  
    - Set parameter: `NetworkStackName` → `ikhsan-network` (to import networking outputs)  
-   - **Tags**: Add tag with `Key: application` and `Value: inventory`  
    - Review and create the stack
 
 3. Wait until the stack status is `CREATE_COMPLETE`.
