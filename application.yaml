@@ -1,0 +1,212 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Application Template: Demonstrates how to reference resources from a different stack.
+  This template provisions an EC2 instance in a VPC Subnet provisioned in a different stack.
+
+# This template creates:
+#   Amazon EC2 instance
+#   Security Group
+
+######################
+# Parameters section
+######################
+
+Parameters:
+
+  NetworkStackName:
+    Description: >-
+      Name of an active CloudFormation stack that contains the networking
+      resources, such as the VPC and subnet that will be used in this stack.
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: ikhsan-network
+
+  AmazonLinuxAMIID:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+######################
+# Resources section
+######################
+
+Resources:
+
+  WebServerInstance:
+    Type: AWS::EC2::Instance
+    Metadata:
+      'AWS::CloudFormation::Init':
+        configSets:
+          All:
+            - ConfigureSampleApp
+        ConfigureSampleApp:
+          packages:
+            yum:
+              httpd: []
+          files:
+            /var/www/html/index.html:
+              content: |
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                  <meta charset="UTF-8" />
+                  <meta name="viewport" content="width=device-width, initial-scale=1" />
+                  <title>AWS Trainer Incubation Acceptance Announcement</title>
+                  <style>
+                    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap');
+
+                    body {
+                      margin: 0;
+                      padding: 2rem;
+                      font-family: 'Poppins', sans-serif;
+                      background-color: #e6f4ff;
+                      color: #1a1a1a;
+                      display: flex;
+                      justify-content: center;
+                      align-items: center;
+                      min-height: 100vh;
+                    }
+
+                    .card {
+                      background: white;
+                      max-width: 600px;
+                      width: 100%;
+                      border-radius: 16px;
+                      box-shadow: 0 12px 26px rgba(0,0,0,0.15);
+                      padding: 2rem 3rem;
+                      box-sizing: border-box;
+                      text-align: center;
+                    }
+
+                    h1 {
+                      color: #0073e6;
+                      font-weight: 700;
+                      margin-bottom: 1.5rem;
+                      font-size: 2rem;
+                    }
+
+                    p {
+                      font-size: 1.1rem;
+                      line-height: 1.6;
+                      margin-bottom: 2rem;
+                      font-weight: 500;
+                    }
+
+                    .images-section {
+                      display: flex;
+                      flex-direction: column;
+                      align-items: center;
+                      gap: 1rem;
+                    }
+
+                    .images-section img {
+                      width: 1000px;
+                      max-width: 100%;
+                      border-radius: 12px;
+                      box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+                      background: #f5faff;
+                      object-fit: contain;
+                      border: 3px solid #0073e6;
+                    }
+
+                    .caption {
+                      font-size: 1rem;
+                      color: #555;
+                      max-width: 260px;
+                      margin: 0 auto 2rem auto;
+                      font-style: italic;
+                    }
+                  </style>
+                </head>
+                <body>
+                  <div class="card" role="main" aria-labelledby="title" aria-describedby="desc">
+                    <h1 id="title">Congratulations!</h1>
+                    <p id="desc">
+                      Mohamad Ikhsan Nurulloh,<br />
+                      Congratulations! You have officially been accepted as a participant in the AWS Trainer Incubation Program.
+                    </p>
+
+                    <div class="images-section" aria-label="Congratulations image and cloud formation">
+                      <img src="https://s3.amazonaws.com/cloudformation-examples/cloudformation_graphic.png" alt="Successfully built infrastructure on AWS using CloudFormation" />
+                      <div class="caption">Congratulations! You have successfully built a reliable AWS infrastructure using CloudFormation.</div>
+                    </div>
+                  </div>
+                </body>
+                </html>
+              mode: 000644
+              owner: apache
+              group: apache
+          services:
+            sysvinit:
+              httpd:
+                enabled: true
+                ensureRunning: true
+    Properties:
+      InstanceType: t3.micro
+      ImageId: !Ref AmazonLinuxAMIID
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref WebServerSecurityGroup
+          AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          DeleteOnTermination: true
+          SubnetId:
+            Fn::ImportValue:
+              !Sub ${NetworkStackName}-SubnetID
+      Tags:
+        - Key: Name
+          Value: Web Server
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum update -y aws-cfn-bootstrap
+          # Install the files and packages from the metadata
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerInstance --configsets All --region ${AWS::Region}
+          # Signal the status from cfn-init
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT5M
+
+  DiskVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      Size: 100
+      AvailabilityZone: !GetAtt WebServerInstance.AvailabilityZone
+      Tags:
+        - Key: Name
+          Value: Web Data
+    DeletionPolicy: Snapshot
+
+  DiskMountPoint:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      InstanceId: !Ref WebServerInstance
+      VolumeId: !Ref DiskVolume
+      Device: /dev/sdh
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP ingress
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${NetworkStackName}-VPCID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: Web Server Security Group
+
+######################
+# Outputs section
+######################
+
+Outputs:
+  URL:
+    Description: URL of the sample website
+    Value: !Sub 'http://${WebServerInstance.PublicDnsName}'
